@@ -1,8 +1,21 @@
 export const CSS = `
+:root {
+  --font-variation: "wght" 400, "wdth" 100, "opsz" 48;
+  --fsz: 42px;
+  --ls: 0.01em;
+  --lh: 1.25;
+  --fg: #2c2a26;
+  --muted: #999;
+  --c1: hsl(50, 33%, 96%);
+  --c2: hsl(80, 23%, 88%);
+  --c3: hsl(260, 13%, 100%);
+  --bg: var(--c1);
+  --handle-blend: darken;
+}
 html, body {
   height: 100%; margin: 0;
   font-family: 'Playfair', serif;
-  color: #333;
+  color: var(--fg, #333);
 }
 body {
   display: flex; flex-direction: column;
@@ -22,7 +35,7 @@ body.about-active {
 /* Gradient background layer */
 #bg-layer {
   position: fixed; inset: 0; z-index: 0;
-  background: #f8f8f2;
+  background: var(--bg);
 }
 
 /* --- Header: title + about --- */
@@ -39,7 +52,7 @@ header {
 #title {
   font-size: 14px;
   font-style: italic;
-  color: #999;
+  color: var(--fg);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: font-style .3s, color .3s;
@@ -65,14 +78,14 @@ header {
 header button {
   font-family: 'Playfair', serif;
   background: transparent; border: none;
-  color: #999; padding: 0;
+  color: var(--fg); padding: 0;
   cursor: pointer; font-size: 14px;
   font-style: italic;
-  transition: color .3s;
+  transition: color .3s, opacity .3s;
 }
-header button:hover { color: #333; }
+header button:hover { opacity: 0.6; }
 header button.active {
-  color: #333;
+  color: var(--fg);
   font-style: normal;
   text-decoration: underline;
 }
@@ -96,11 +109,11 @@ footer {
 footer button {
   font-family: 'Playfair', serif;
   background: transparent; border: none;
-  color: #333; padding: 4px 10px;
-  cursor: pointer; transition: color .3s;
+  color: var(--fg); padding: 4px 10px;
+  cursor: pointer; transition: color .3s, opacity .3s;
   font-style: italic; font-size: 15px;
 }
-footer button:hover { color: #777; }
+footer button:hover { opacity: 0.6; }
 footer button.active {
   font-style: normal; font-weight: bold;
   text-decoration: underline;
@@ -136,20 +149,22 @@ footer button.active {
   position: absolute;
   top: 0; right: 0;
   font-size: 11px;
-  color: #ccc;
+  color: var(--fg);
   font-style: italic;
   letter-spacing: 0.03em;
   pointer-events: none;
 }
 
 #card {
-  font-size: 42px;
+  font-variation-settings: var(--font-variation);
+  font-size: var(--fsz);
+  letter-spacing: var(--ls);
+  line-height: var(--lh);
   text-align: center;
   padding: 40px;
   cursor: pointer;
   font-style: italic;
-  max-width: calc(min(12em, 70vw));
-  box-sizing: content-box;
+  
 }
 
 /* In sculpt mode, card areas get sculpt cursors and block selection */
@@ -170,11 +185,7 @@ body.sculpt #card-text:active { cursor: grabbing; }
   transition: opacity .2s ease;
 }
 
-/* Breathing animation (first visit only) */
-@keyframes breathe {
-  0%, 100% { font-variation-settings: "wght" 400, "wdth" 100, "opsz" 48; }
-  50% { font-variation-settings: "wght" 450, "wdth" 101, "opsz" 60; }
-}
+/* Breathing animation (first visit only) — keyframes injected dynamically by JS */
 #card.breathing {
   animation: breathe 2.5s ease-in-out 1;
 }
@@ -187,22 +198,32 @@ body.sculpt #card-text:active { cursor: grabbing; }
   width: 44px; height: 44px;
   transform: translate(-50%,-50%);
   touch-action: none;
+  mix-blend-mode: var(--handle-blend);
   -webkit-user-select: none; user-select: none;
 }
 .handle:active, .handle.dragging { cursor: grabbing; }
 .handle .glyph {
   font-family: 'Playfair', serif;
   line-height: 1;
-  opacity: 0.28;
+  opacity: 0.6;
   transition: opacity .25s, transform .25s;
   pointer-events: none;
 }
 .handle:hover .glyph, .handle.dragging .glyph {
   opacity: 1; transform: scale(1.15);
 }
+
+/* Palette distribution — font handles in fg/muted territory,
+   env handles tinted with the gradient palette colors */
+#h-shape  { color: var(--fg); }
+#h-detail { color: var(--muted); }
+#h-scale  { color: color-mix(in srgb, var(--fg) 60%, var(--c3) 40%); }
+#h-color  { color: color-mix(in srgb, var(--fg) 45%, var(--c2) 55%); }
+#h-tone   { color: color-mix(in srgb, var(--fg) 45%, var(--c3) 55%); }
+#h-field  { color: color-mix(in srgb, var(--fg) 50%, color-mix(in srgb, var(--c2), var(--c3)) 50%); }
 .handle .tip {
   position: absolute; top: 100%; left: 50%;
-  transform: translateX(-50%); margin-top: 6px;
+  transform: translateX(-50%);
   font-size: 8px; letter-spacing: 0.04em;
   font-family: monospace; text-align: center;
   opacity: 0; transition: opacity .2s;
@@ -226,8 +247,8 @@ body.sculpt #card-text:active { cursor: grabbing; }
   text-align: left;
   position: relative; z-index: 2;
 }
-#about h2 { font-size: 20px; margin: 1.4em 0 .4em; }
-#about h3 { font-size: 17px; margin: 1.2em 0 .3em; }
+#about h2 { font-size: 3em; margin: 1.4em 0 .4em; font-style: italic; }
+#about h3 { font-size: 1.4em; margin: 1.2em 0 .3em; font-style: italic; }
 #about p { margin: .4em 0; }
 #about .subtitle { font-style: italic; color: #777; }
 #about dl { margin: .4em 0; padding: 0; }

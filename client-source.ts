@@ -12,7 +12,7 @@ var LIM = { wght: [300,900], wdth: [87.5,112.5], opsz: [5,1200], fsz: [16,120], 
 
 // --- Environment state (gradient) ---
 var env = { hue: 50, sat: 33, lit: 96, gAng: 135, gSpread: 80, gOffset: 50 };
-var ELIM = { hue: [0,360], sat: [0,100], lit: [5,98], gAng: [0,360], gSpread: [20,200], gOffset: [10,90] };
+var ELIM = { hue: [0,360], sat: [0,100], lit: [5,98], gAng: [0,360], gSpread: [0,200], gOffset: [10,90] };
 
 var FONT_KEY = "oblique-font";
 var ENV_KEY = "oblique-env";
@@ -88,12 +88,11 @@ function envFromHash(h) {
 
 // --- Apply typography ---
 function applyFont() {
-  var el = $("card");
-  if (!el) return;
-  el.style.fontVariationSettings = '"wght" '+font.wght.toFixed(1)+',"wdth" '+font.wdth.toFixed(2)+',"opsz" '+font.opsz.toFixed(1);
-  el.style.fontSize = font.fsz.toFixed(1)+"px";
-  el.style.letterSpacing = font.ls.toFixed(4)+"em";
-  el.style.lineHeight = font.lh.toFixed(3);
+  var r = document.documentElement.style;
+  r.setProperty("--font-variation", '"wght" '+font.wght.toFixed(1)+',"wdth" '+font.wdth.toFixed(2)+',"opsz" '+font.opsz.toFixed(1));
+  r.setProperty("--fsz", font.fsz.toFixed(1)+"px");
+  r.setProperty("--ls", font.ls.toFixed(4)+"em");
+  r.setProperty("--lh", font.lh.toFixed(3));
   positionHandles();
 }
 
@@ -112,32 +111,31 @@ function applyEnv() {
   var cx = 50+Math.cos(rad)*(off-50)*0.6;
   var cy = 50+Math.sin(rad)*(off-50)*0.6;
 
-  var bg =
-    "radial-gradient(ellipse "+spr.toFixed(0)+"% "+(spr*0.8).toFixed(0)+"% at "+cx.toFixed(0)+"% "+cy.toFixed(0)+"%, "+c2+" 0%, transparent 70%),"+
-    "radial-gradient(ellipse "+(spr*1.4).toFixed(0)+"% "+(spr*1.2).toFixed(0)+"% at "+(100-cx).toFixed(0)+"% "+(100-cy).toFixed(0)+"%, "+c3+" 0%, transparent 60%),"+
-    c1;
+  // Bloom alpha fades with spread so the gradient dissolves smoothly to flat
+  // rather than collapsing to a sharp dot. Hits full opacity at spr >= 100.
+  // --c2/--c3 CSS vars stay opaque (used for handle palette etc).
+  var ga = Math.min(1, spr / 100).toFixed(3);
+  var c2a = "hsla("+h2.toFixed(0)+","+Math.max(0,s-10).toFixed(0)+"%,"+clamp(5,l-8,98).toFixed(0)+"%,"+ga+")";
+  var c3a = "hsla("+h3.toFixed(0)+","+Math.max(0,s*0.4).toFixed(0)+"%,"+clamp(5,l+4,98).toFixed(0)+"%,"+ga+")";
 
-  var bgEl = $("bg-layer");
-  if (bgEl) bgEl.style.background = bg;
+  var bg = spr < 1 ? c1 :
+    "radial-gradient(ellipse "+spr.toFixed(0)+"% "+(spr*0.8).toFixed(0)+"% at "+cx.toFixed(0)+"% "+cy.toFixed(0)+"%, "+c2a+" 0%, transparent 70%),"+
+    "radial-gradient(ellipse "+(spr*1.4).toFixed(0)+"% "+(spr*1.2).toFixed(0)+"% at "+(100-cx).toFixed(0)+"% "+(100-cy).toFixed(0)+"%, "+c3a+" 0%, transparent 60%),"+
+    c1;
 
   // Adaptive text color
   var light = l < 45;
   var fg = light ? "hsl("+h.toFixed(0)+","+Math.max(5,s-15).toFixed(0)+"%,88%)" : "#2c2a26";
   var muted = light ? "hsl("+h.toFixed(0)+","+Math.max(5,s-15).toFixed(0)+"%,55%)" : "#999";
 
-  document.body.style.color = fg;
-
-  // Header/footer: no background, just text color adaptation
-  var hdr = document.querySelector("header");
-  var ftr = document.querySelector("footer");
-  if (hdr) hdr.querySelectorAll("button, #title").forEach(function(el) { el.style.color = fg; });
-  if (ftr) ftr.querySelectorAll("button").forEach(function(btn) { btn.style.color = fg; });
-
-  var idx = $("card-index");
-  if (idx) idx.style.color = fg;
-
-  // Handle colors adapt to environment
-  document.querySelectorAll(".handle").forEach(function(el){el.style.color=fg});
+  var r = document.documentElement.style;
+  r.setProperty("--c1", c1);
+  r.setProperty("--c2", c2);
+  r.setProperty("--c3", c3);
+  r.setProperty("--bg", bg);
+  r.setProperty("--fg", fg);
+  r.setProperty("--muted", muted);
+  r.setProperty("--handle-blend", light ? "screen" : "darken");
 
   var meta = document.getElementById("meta-theme");
   if (meta) meta.setAttribute("content", c1);
@@ -181,6 +179,24 @@ function setSculpt(on) {
     document.body.classList.remove("sculpt");
     if (titleEl) titleEl.classList.remove("sculpt-active");
   }
+}
+
+// --- Breathing animation (first visit) ---
+// Keyframes are generated from the live font state so the animation breathes
+// around whatever values applyHash() landed on, with no jump at start or end.
+function startBreathe(card) {
+  var w0 = font.wght, d0 = font.wdth, o0 = font.opsz;
+  var w1 = cl("wght", w0 + 50);
+  var d1 = cl("wdth", d0 + 1);
+  var o1 = cl("opsz", o0 + 12);
+  var kf = '@keyframes breathe{' +
+    '0%,100%{font-variation-settings:"wght" '+w0.toFixed(1)+',"wdth" '+d0.toFixed(2)+',"opsz" '+o0.toFixed(1)+'}' +
+    '50%{font-variation-settings:"wght" '+w1.toFixed(1)+',"wdth" '+d1.toFixed(2)+',"opsz" '+o1.toFixed(1)+'}' +
+  '}';
+  var s = document.getElementById("breathe-kf") || document.createElement("style");
+  s.id = "breathe-kf"; s.textContent = kf;
+  document.head.appendChild(s);
+  card.classList.add("breathing");
 }
 
 // --- Init ---
@@ -262,7 +278,7 @@ function init() {
 
   // First-visit breathing animation
   if (isFirstVisit()) {
-    setTimeout(function() { card.classList.add("breathing"); }, 800);
+    setTimeout(function() { startBreathe(card); }, 800);
     setTimeout(function() { card.classList.remove("breathing"); }, 3500);
   }
 }
