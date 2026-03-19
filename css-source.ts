@@ -148,6 +148,8 @@ footer button.active {
   padding: 40px;
   cursor: pointer;
   font-style: italic;
+  max-width: calc(min(12em, 70vw));
+  box-sizing: content-box;
 }
 
 /* In sculpt mode, card areas get sculpt cursors and block selection */

@@ -35,7 +35,7 @@ function wantsHtml(req: Request): boolean {
   return (req.headers.get("accept") || "").includes("text/html");
 }
 
-export default async function(req: Request): Promise<Response> {
+async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const origin = url.origin;
@@ -88,4 +88,13 @@ export default async function(req: Request): Promise<Response> {
   }
 
   return new Response("Not found", { status: 404 });
+}
+
+export default handler;
+
+// Local dev server
+if (import.meta.main) {
+  const port = 8000;
+  console.log(`Starting server on http://localhost:${port}`);
+  Deno.serve({ port }, handler);
 }
