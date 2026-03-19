@@ -4,731 +4,744 @@ var currentMode = "hourly";
 var currentSeed = "";
 var currentPage = "card";
 var currentIndex = -1;
+var sculptMode = false;
 
-// --- Persistent font state ---
-var font = { wght: 400, wdth: 100, opsz: 48, ls: 0.01, lh: 1.25 };
+// --- Typography state ---
+var font = { wght: 400, wdth: 100, opsz: 48, fsz: 42, ls: 0.01, lh: 1.25 };
+var LIM = { wght: [300,900], wdth: [87.5,112.5], opsz: [5,1200], fsz: [16,120], ls: [-0.2,0.15], lh: [0.7,2.2] };
 
-var LIM = {
-  wght: [300, 900],
-  wdth: [87.5, 112.5],
-  opsz: [5, 1200],
-  ls: [-0.1, 0.15],
-  lh: [0.7, 2.2]
-};
+// --- Environment state (gradient) ---
+var env = { hue: 50, sat: 33, lit: 96, gAng: 135, gSpread: 80, gOffset: 50 };
+var ELIM = { hue: [0,360], sat: [0,100], lit: [5,98], gAng: [0,360], gSpread: [20,200], gOffset: [10,90] };
 
-var STORAGE_KEY = "oblique-font";
-var ENV_STORAGE_KEY = "oblique-env";
-
-// Environment state (background HSL)
-// Base: #f8f8f2 ≈ hsl(50, 33, 96)
-var env = { hue: 50, sat: 33, lit: 96 };
-var ENV_LIM = {
-  hue: [0, 360],
-  sat: [0, 100],
-  lit: [5, 98]
-};
+var FONT_KEY = "oblique-font";
+var ENV_KEY = "oblique-env";
+var SEEN_KEY = "oblique-seen";
 
 function $(id) { return document.getElementById(id); }
 function clamp(lo, v, hi) { return Math.max(lo, Math.min(hi, v)); }
-function clampAxis(k, v) { return clamp(LIM[k][0], v, LIM[k][1]); }
+function cl(k, v) { return clamp(LIM[k][0], v, LIM[k][1]); }
+function ce(k, v) { return clamp(ELIM[k][0], v, ELIM[k][1]); }
 
-// --- Font state persistence ---
-
-function saveFont() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(font)); } catch(e) {}
-}
-
-function loadFontFromStorage() {
+// --- Persistence ---
+function saveFont() { try { localStorage.setItem(FONT_KEY, JSON.stringify(font)); } catch(e) {} }
+function saveEnv() { try { localStorage.setItem(ENV_KEY, JSON.stringify(env)); } catch(e) {} }
+function loadFont() {
   try {
-    var s = localStorage.getItem(STORAGE_KEY);
-    if (s) {
-      var o = JSON.parse(s);
-      if (o && typeof o.wght === "number") {
-        font.wght = clampAxis("wght", o.wght);
-        font.wdth = clampAxis("wdth", o.wdth);
-        font.opsz = clampAxis("opsz", o.opsz);
-        font.ls = clampAxis("ls", o.ls);
-        font.lh = clampAxis("lh", o.lh);
-      }
+    var o = JSON.parse(localStorage.getItem(FONT_KEY));
+    if (o && typeof o.wght === "number") {
+      font.wght=cl("wght",o.wght); font.wdth=cl("wdth",o.wdth); font.opsz=cl("opsz",o.opsz);
+      font.ls=cl("ls",o.ls); font.lh=cl("lh",o.lh);
+      if (o.fsz) font.fsz=cl("fsz",o.fsz);
     }
   } catch(e) {}
 }
-
-function saveEnv() {
-  try { localStorage.setItem(ENV_STORAGE_KEY, JSON.stringify(env)); } catch(e) {}
-}
-
-function loadEnvFromStorage() {
+function loadEnv() {
   try {
-    var s = localStorage.getItem(ENV_STORAGE_KEY);
-    if (s) {
-      var o = JSON.parse(s);
-      if (o && typeof o.hue === "number") {
-        env.hue = clamp(ENV_LIM.hue[0], o.hue, ENV_LIM.hue[1]);
-        env.sat = clamp(ENV_LIM.sat[0], o.sat, ENV_LIM.sat[1]);
-        env.lit = clamp(ENV_LIM.lit[0], o.lit, ENV_LIM.lit[1]);
-      }
+    var o = JSON.parse(localStorage.getItem(ENV_KEY));
+    if (o && typeof o.hue === "number") {
+      env.hue=ce("hue",o.hue); env.sat=ce("sat",o.sat); env.lit=ce("lit",o.lit);
+      if (o.gAng!==undefined) env.gAng=ce("gAng",o.gAng);
+      if (o.gSpread!==undefined) env.gSpread=ce("gSpread",o.gSpread);
+      if (o.gOffset!==undefined) env.gOffset=ce("gOffset",o.gOffset);
     }
   } catch(e) {}
 }
+function isFirstVisit() {
+  try { return !localStorage.getItem(SEEN_KEY); } catch(e) { return true; }
+}
+function markSeen() {
+  try { localStorage.setItem(SEEN_KEY, "1"); } catch(e) {}
+}
 
+// --- Hash ---
+function fontToHash() {
+  var p = [];
+  if (font.wght !== 400) p.push("wght=" + font.wght.toFixed(0));
+  if (font.wdth !== 100) p.push("wdth=" + font.wdth.toFixed(1));
+  if (font.opsz !== 48) p.push("opsz=" + font.opsz.toFixed(0));
+  if (font.fsz !== 42) p.push("fsz=" + font.fsz.toFixed(0));
+  if (Math.abs(font.ls - 0.01) > 0.002) p.push("ls=" + font.ls.toFixed(4));
+  if (Math.abs(font.lh - 1.25) > 0.01) p.push("lh=" + font.lh.toFixed(3));
+  return p;
+}
+function envToHash() {
+  var p = [];
+  if (Math.abs(env.hue-50)>1) p.push("hue="+env.hue.toFixed(0));
+  if (Math.abs(env.sat-33)>1) p.push("sat="+env.sat.toFixed(0));
+  if (Math.abs(env.lit-96)>1) p.push("lit="+env.lit.toFixed(0));
+  if (Math.abs(env.gAng-135)>1) p.push("gAng="+env.gAng.toFixed(0));
+  if (Math.abs(env.gSpread-80)>1) p.push("gSpr="+env.gSpread.toFixed(0));
+  if (Math.abs(env.gOffset-50)>1) p.push("gOff="+env.gOffset.toFixed(0));
+  return p;
+}
+function fontFromHash(h) {
+  if(h.wght) font.wght=cl("wght",+h.wght); if(h.wdth) font.wdth=cl("wdth",+h.wdth);
+  if(h.opsz) font.opsz=cl("opsz",+h.opsz); if(h.fsz) font.fsz=cl("fsz",+h.fsz);
+  if(h.ls) font.ls=cl("ls",+h.ls); if(h.lh) font.lh=cl("lh",+h.lh);
+}
+function envFromHash(h) {
+  if(h.hue) env.hue=ce("hue",+h.hue); if(h.sat) env.sat=ce("sat",+h.sat);
+  if(h.lit) env.lit=ce("lit",+h.lit); if(h.gAng) env.gAng=ce("gAng",+h.gAng);
+  if(h.gSpr) env.gSpread=ce("gSpread",+h.gSpr); if(h.gOff) env.gOffset=ce("gOffset",+h.gOff);
+}
+
+// --- Apply typography ---
+function applyFont() {
+  var el = $("card");
+  if (!el) return;
+  el.style.fontVariationSettings = '"wght" '+font.wght.toFixed(1)+',"wdth" '+font.wdth.toFixed(2)+',"opsz" '+font.opsz.toFixed(1);
+  el.style.fontSize = font.fsz.toFixed(1)+"px";
+  el.style.letterSpacing = font.ls.toFixed(4)+"em";
+  el.style.lineHeight = font.lh.toFixed(3);
+  positionHandles();
+}
+
+// --- Apply environment (radial gradient) ---
 function applyEnv() {
-  var bg = "hsl(" + env.hue.toFixed(0) + "," + env.sat.toFixed(0) + "%," + env.lit.toFixed(0) + "%)";
-  document.documentElement.style.background = bg;
-  document.body.style.background = bg;
-  var fg = env.lit < 50 ? "hsl(" + env.hue.toFixed(0) + "," + Math.max(5, env.sat - 20).toFixed(0) + "%,90%)" : "#333";
+  var h=env.hue, s=env.sat, l=env.lit;
+  var ang=env.gAng, spr=env.gSpread, off=env.gOffset;
+
+  var c1 = "hsl("+h.toFixed(0)+","+s.toFixed(0)+"%,"+l.toFixed(0)+"%)";
+  var h2 = (h+30)%360;
+  var c2 = "hsl("+h2.toFixed(0)+","+Math.max(0,s-10).toFixed(0)+"%,"+clamp(5,l-8,98).toFixed(0)+"%)";
+  var h3 = (h+210)%360;
+  var c3 = "hsl("+h3.toFixed(0)+","+Math.max(0,s*0.4).toFixed(0)+"%,"+clamp(5,l+4,98).toFixed(0)+"%)";
+
+  var rad = ang*Math.PI/180;
+  var cx = 50+Math.cos(rad)*(off-50)*0.6;
+  var cy = 50+Math.sin(rad)*(off-50)*0.6;
+
+  var bg =
+    "radial-gradient(ellipse "+spr.toFixed(0)+"% "+(spr*0.8).toFixed(0)+"% at "+cx.toFixed(0)+"% "+cy.toFixed(0)+"%, "+c2+" 0%, transparent 70%),"+
+    "radial-gradient(ellipse "+(spr*1.4).toFixed(0)+"% "+(spr*1.2).toFixed(0)+"% at "+(100-cx).toFixed(0)+"% "+(100-cy).toFixed(0)+"%, "+c3+" 0%, transparent 60%),"+
+    c1;
+
+  var bgEl = $("bg-layer");
+  if (bgEl) bgEl.style.background = bg;
+
+  // Adaptive text color
+  var light = l < 45;
+  var fg = light ? "hsl("+h.toFixed(0)+","+Math.max(5,s-15).toFixed(0)+"%,88%)" : "#2c2a26";
+  var muted = light ? "hsl("+h.toFixed(0)+","+Math.max(5,s-15).toFixed(0)+"%,55%)" : "#999";
+
   document.body.style.color = fg;
-  // Fixed elements: opaque background-color for Safari 26 toolbar tinting
+
+  // Header/footer: no background, just text color adaptation
   var hdr = document.querySelector("header");
   var ftr = document.querySelector("footer");
-  if (hdr) {
-    hdr.style.backgroundColor = bg;
-    var muted = env.lit < 50 ? "hsl(" + env.hue.toFixed(0) + "," + Math.max(5, env.sat - 20).toFixed(0) + "%,70%)" : "#999";
-    hdr.querySelectorAll("button, #title").forEach(function(el) { el.style.color = muted; });
-  }
-  if (ftr) {
-    ftr.style.backgroundColor = bg;
-    ftr.querySelectorAll("button").forEach(function(btn) { btn.style.color = fg; });
-  }
-  // Chrome Android still uses theme-color meta
-  var meta = document.getElementById("meta-theme");
-  if (meta) meta.setAttribute("content", bg);
-  // Card index muted color
+  if (hdr) hdr.querySelectorAll("button, #title").forEach(function(el) { el.style.color = fg; });
+  if (ftr) ftr.querySelectorAll("button").forEach(function(btn) { btn.style.color = fg; });
+
   var idx = $("card-index");
-  if (idx) idx.style.color = env.lit < 50 ? "hsl(" + env.hue.toFixed(0) + "," + Math.max(5, env.sat - 20).toFixed(0) + "%,40%)" : "#ccc";
+  if (idx) idx.style.color = fg;
+
+  // Handle colors adapt to environment
+  document.querySelectorAll(".handle").forEach(function(el){el.style.color=fg});
+
+  var meta = document.getElementById("meta-theme");
+  if (meta) meta.setAttribute("content", c1);
+  positionHandles();
 }
 
-function envToHash() {
-  var parts = [];
-  if (Math.abs(env.hue - 50) > 1) parts.push("hue=" + env.hue.toFixed(0));
-  if (Math.abs(env.sat - 33) > 1) parts.push("sat=" + env.sat.toFixed(0));
-  if (Math.abs(env.lit - 96) > 1) parts.push("lit=" + env.lit.toFixed(0));
-  return parts;
-}
-
-function envFromHash(h) {
-  if (h.hue) env.hue = clamp(ENV_LIM.hue[0], parseFloat(h.hue), ENV_LIM.hue[1]);
-  if (h.sat) env.sat = clamp(ENV_LIM.sat[0], parseFloat(h.sat), ENV_LIM.sat[1]);
-  if (h.lit) env.lit = clamp(ENV_LIM.lit[0], parseFloat(h.lit), ENV_LIM.lit[1]);
-}
-
-function fontToHash() {
-  var parts = [];
-  if (font.wght !== 400) parts.push("wght=" + font.wght.toFixed(0));
-  if (font.wdth !== 100) parts.push("wdth=" + font.wdth.toFixed(1));
-  if (font.opsz !== 48) parts.push("opsz=" + font.opsz.toFixed(0));
-  if (Math.abs(font.ls - 0.01) > 0.002) parts.push("ls=" + font.ls.toFixed(4));
-  if (Math.abs(font.lh - 1.25) > 0.01) parts.push("lh=" + font.lh.toFixed(3));
-  return parts;
-}
-
-function fontFromHash(h) {
-  if (h.wght) font.wght = clampAxis("wght", parseFloat(h.wght));
-  if (h.wdth) font.wdth = clampAxis("wdth", parseFloat(h.wdth));
-  if (h.opsz) font.opsz = clampAxis("opsz", parseFloat(h.opsz));
-  if (h.ls) font.ls = clampAxis("ls", parseFloat(h.ls));
-  if (h.lh) font.lh = clampAxis("lh", parseFloat(h.lh));
-}
-
-// --- Apply font to card element ---
-
-function applyFont(el, wght, wdth, opsz, ls, lh) {
-  el.style.fontVariationSettings =
-    '"wght" ' + wght.toFixed(1) +
-    ', "wdth" ' + wdth.toFixed(2) +
-    ', "opsz" ' + opsz.toFixed(1);
-  el.style.letterSpacing = ls.toFixed(4) + "em";
-  el.style.lineHeight = lh.toFixed(3);
-}
-
-function applyCurrentFont() {
-  var card = $("card");
-  if (card) applyFont(card, font.wght, font.wdth, font.opsz, font.ls, font.lh);
-}
-
-// --- URL hash state ---
-
+// --- Hash read/write ---
 function readHash() {
-  var h = location.hash.slice(1);
-  if (!h) return {};
+  var h = location.hash.slice(1); if (!h) return {};
   var out = {};
-  h.split("&").forEach(function(pair) {
-    var parts = pair.split("=");
-    out[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1] || "");
-  });
+  h.split("&").forEach(function(p) { var kv=p.split("="); out[decodeURIComponent(kv[0])]=decodeURIComponent(kv[1]||""); });
   return out;
 }
-
 function writeHash() {
-  var parts = [];
-  if (currentPage === "about") {
-    parts.push("about");
-    parts = parts.concat(envToHash());
-  } else {
-    parts.push("mode=" + currentMode);
-    if (currentSeed) parts.push("seed=" + encodeURIComponent(currentSeed));
-    parts = parts.concat(fontToHash());
-    parts = parts.concat(envToHash());
-  }
-  history.replaceState(null, "", "#" + parts.join("&"));
+  var p = [];
+  if (currentPage==="about") { p.push("about"); }
+  else { p.push("mode="+currentMode); if(currentSeed) p.push("seed="+encodeURIComponent(currentSeed)); p=p.concat(fontToHash()); }
+  p = p.concat(envToHash());
+  history.replaceState(null,"","#"+p.join("&"));
 }
-
 function applyHash() {
   var h = readHash();
-  if ("about" in h) {
-    envFromHash(h);
-    currentPage = "about";
-    showAboutView();
-    return;
-  }
-  if (h.mode && MODES.indexOf(h.mode) !== -1) currentMode = h.mode;
-  if (h.seed) currentSeed = h.seed;
-  fontFromHash(h);
   envFromHash(h);
-  currentPage = "card";
-  showCardView();
-  updateSeedInput();
-  applyCurrentFont();
-  applyEnv();
-  draw();
+  if ("about" in h) { currentPage="about"; showAboutView(); return; }
+  if (h.mode && MODES.indexOf(h.mode)!==-1) currentMode=h.mode;
+  if (h.seed) currentSeed=h.seed;
+  fontFromHash(h);
+  currentPage="card"; showCardView();
+  if ($("seed-input")) $("seed-input").value = currentSeed;
+  applyFont(); applyEnv(); draw();
+}
+
+// --- Sculpt mode ---
+function setSculpt(on) {
+  sculptMode = on;
+  var titleEl = $("title");
+  if (on) {
+    document.body.classList.add("sculpt");
+    if (titleEl) titleEl.classList.add("sculpt-active");
+  } else {
+    document.body.classList.remove("sculpt");
+    if (titleEl) titleEl.classList.remove("sculpt-active");
+  }
 }
 
 // --- Init ---
-
 function init() {
-  loadFontFromStorage();
-  loadEnvFromStorage();
+  loadFont(); loadEnv();
+
+  // BG layer
+  var bgLayer = document.createElement("div");
+  bgLayer.id = "bg-layer";
+  document.body.insertBefore(bgLayer, document.body.firstChild);
 
   // Header
   var header = document.createElement("header");
   var title = document.createElement("span");
-  title.id = "title";
-  title.textContent = "Oblique Strategies";
+  title.id = "title"; title.textContent = "Oblique Strategies";
+  title.onclick = function() {
+    setSculpt(!sculptMode);
+    // Dismiss hint on first sculpt
+    var hint = $("sculpt-hint");
+    if (hint) { hint.classList.add("hidden"); markSeen(); }
+  };
   header.appendChild(title);
 
   var aboutBtn = document.createElement("button");
-  aboutBtn.id = "btn-about";
-  aboutBtn.textContent = "About";
+  aboutBtn.id = "btn-about"; aboutBtn.textContent = "About";
   aboutBtn.onclick = function() {
-    if (currentPage === "about") { currentPage = "card"; showCardView(); writeHash(); draw(); }
-    else { currentPage = "about"; showAboutView(); writeHash(); }
+    if (currentPage==="about") { currentPage="card"; showCardView(); writeHash(); draw(); }
+    else { currentPage="about"; showAboutView(); writeHash(); }
   };
   header.appendChild(aboutBtn);
   document.body.appendChild(header);
 
+  // Sculpt hint (first visit only)
+  if (isFirstVisit()) {
+    var hint = document.createElement("div");
+    hint.id = "sculpt-hint";
+    hint.textContent = "tap title to sculpt";
+    document.body.appendChild(hint);
+    setTimeout(function() { hint.classList.add("hidden"); }, 5000);
+  }
+
   // Seed row
-  var seedRow = document.createElement("div");
-  seedRow.id = "seed-row";
+  var seedRow = document.createElement("div"); seedRow.id = "seed-row";
   seedRow.innerHTML = '<label>seed:</label><input id="seed-input" type="text" placeholder="your name...">';
   document.body.appendChild(seedRow);
-
-  $("seed-input").addEventListener("change", function() {
-    currentSeed = this.value.trim();
-    writeHash();
-    draw();
-  });
+  $("seed-input").addEventListener("change", function() { currentSeed=this.value.trim(); writeHash(); draw(); });
 
   // Card area
-  var cardArea = document.createElement("div");
-  cardArea.id = "card-area";
-
-  var cardIndex = document.createElement("span");
-  cardIndex.id = "card-index";
+  var cardArea = document.createElement("div"); cardArea.id = "card-area";
+  var cardIndex = document.createElement("span"); cardIndex.id = "card-index";
   cardArea.appendChild(cardIndex);
-
-  var card = document.createElement("div");
-  card.id = "card";
-  var cardText = document.createElement("div");
-  cardText.id = "card-text";
+  var card = document.createElement("div"); card.id = "card";
+  var cardText = document.createElement("div"); cardText.id = "card-text";
   cardText.textContent = "Click for an Oblique Strategy";
-  card.appendChild(cardText);
-  cardArea.appendChild(card);
+  card.appendChild(cardText); cardArea.appendChild(card);
   document.body.appendChild(cardArea);
 
-  // Footer: two rows
+  // Footer
   var footer = document.createElement("footer");
-
-  var row1 = document.createElement("div");
-  row1.className = "mode-row";
-  ["hourly", "daily", "weekly", "monthly"].forEach(function(m) {
-    var btn = document.createElement("button");
-    btn.id = "btn-" + m;
-    btn.textContent = m.charAt(0).toUpperCase() + m.slice(1);
-    btn.onclick = function() { setMode(m); };
-    row1.appendChild(btn);
+  var row1 = document.createElement("div"); row1.className = "mode-row";
+  ["hourly","daily","weekly","monthly"].forEach(function(m) {
+    var b=document.createElement("button"); b.id="btn-"+m;
+    b.textContent=m.charAt(0).toUpperCase()+m.slice(1); b.onclick=function(){setMode(m);};
+    row1.appendChild(b);
   });
   footer.appendChild(row1);
+  var row2 = document.createElement("div"); row2.className = "mode-row";
+  var bO=document.createElement("button"); bO.id="btn-original"; bO.textContent="Random"; bO.onclick=function(){setMode("original");};
+  var bD=document.createElement("button"); bD.id="btn-deterministic"; bD.textContent="Deterministic"; bD.onclick=function(){setMode("deterministic");};
+  row2.appendChild(bO); row2.appendChild(bD);
+  footer.appendChild(row2); document.body.appendChild(footer);
 
-  var row2 = document.createElement("div");
-  row2.className = "mode-row";
-  var btnOrig = document.createElement("button");
-  btnOrig.id = "btn-original";
-  btnOrig.textContent = "Random";
-  btnOrig.onclick = function() { setMode("original"); };
-  row2.appendChild(btnOrig);
-
-  var btnDet = document.createElement("button");
-  btnDet.id = "btn-deterministic";
-  btnDet.textContent = "Deterministic";
-  btnDet.onclick = function() { setMode("deterministic"); };
-  row2.appendChild(btnDet);
-
-  footer.appendChild(row2);
-  document.body.appendChild(footer);
-
-  // About
-  var about = document.createElement("div");
-  about.id = "about";
+  var about = document.createElement("div"); about.id = "about";
   document.body.appendChild(about);
 
-  initCardTouch(card);
-  initBackgroundTouch();
-  loadAbout();
-  applyHash();
+  initTouch(card);
+  initHandles();
+  loadAbout(); applyHash();
+
+  // First-visit breathing animation
+  if (isFirstVisit()) {
+    setTimeout(function() { card.classList.add("breathing"); }, 800);
+    setTimeout(function() { card.classList.remove("breathing"); }, 3500);
+  }
 }
 
 // =============================================
-// Multi-axis touch — cumulative, persistent
-// Tap = draw. Drag = sculpt (no draw).
+// Multitouch — zone-locked, sculpt-mode-gated
 // =============================================
 
-function initCardTouch(card) {
-  var active = false;
-  var sculpting = false;  // true only if drag started on #card-text
-  var originX = 0, originY = 0;
-  var prevX = 0, prevY = 0;
-  var prevT = 0;
-  var velX = 0, velY = 0;
-  var startTime = 0;
-  var maxDist = 0;
-
-  var startFont = {};
-  var startEnv = {};
+function initTouch(card) {
+  var touches = {};
+  var zone = "idle";
+  var startFont = {}, startEnv = {};
+  var tapTimer = 0, maxDist = 0;
   var textEl = $("card-text");
-
-  var DRAG_RADIUS = 100;
-  var TAP_DIST = 10;
-  var TAP_TIME = 1000;
-
-  function getXY(e) {
-    if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
-  }
+  var DR = 120;
+  var TAP_DIST = 10, TAP_TIME = 1000;
 
   function hitText(e) {
-    // Did the touch/click originate on (or inside) the text span?
-    var target = e.target || (e.touches && e.touches[0] && document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY));
-    return target === textEl || (textEl && textEl.contains(target));
-  }
-
-  function onStart(e) {
-    if (currentPage !== "card") return;
-    var p = getXY(e);
-    originX = prevX = p.x;
-    originY = prevY = p.y;
-    prevT = startTime = Date.now();
-    velX = velY = 0;
-    maxDist = 0;
-    active = true;
-    sculpting = hitText(e);
-    if (sculpting) {
-      startFont = { wght: font.wght, wdth: font.wdth, opsz: font.opsz, ls: font.ls, lh: font.lh };
-    } else {
-      startEnv = { hue: env.hue, sat: env.sat, lit: env.lit };
-    }
-  }
-
-  function onMove(e) {
-    if (!active) return;
-    var p = getXY(e);
-    var now = Date.now();
-    var dt = Math.max(1, now - prevT) / 1000;
-
-    var instantVX = (p.x - prevX) / dt;
-    var instantVY = (p.y - prevY) / dt;
-    velX = velX * 0.7 + instantVX * 0.3;
-    velY = velY * 0.7 + instantVY * 0.3;
-    prevX = p.x; prevY = p.y; prevT = now;
-
-    var rawDist = Math.sqrt((p.x - originX) * (p.x - originX) + (p.y - originY) * (p.y - originY));
-    if (rawDist > maxDist) maxDist = rawDist;
-
-    // Only sculpt if drag started on text
-    if (!sculpting) {
-      // Environment: drag on card padding — update env directly
-      var edx = clamp(-1, (p.x - originX) / DRAG_RADIUS, 1);
-      var edy = clamp(-1, (p.y - originY) / DRAG_RADIUS, 1);
-
-      var liveHue = (startEnv.hue + edx * 180 + 360) % 360;
-      var litRange = edy > 0 ? startEnv.lit - ENV_LIM.lit[0] : ENV_LIM.lit[1] - startEnv.lit;
-      var liveLit = clamp(ENV_LIM.lit[0], startEnv.lit + edy * -litRange, ENV_LIM.lit[1]);
-      var espeed = Math.sqrt(velX * velX + velY * velY);
-      var satDamp = clamp(0, espeed / 500, 1);
-      var liveSat = clamp(ENV_LIM.sat[0], startEnv.sat * (1 - satDamp * 0.8), ENV_LIM.sat[1]);
-
-      env.hue = liveHue;
-      env.sat = liveSat;
-      env.lit = liveLit;
-      applyLiveEnv(liveHue, liveSat, liveLit);
-      return;
-    }
-
-    var dx = clamp(-1, (p.x - originX) / DRAG_RADIUS, 1);
-    var dy = clamp(-1, (p.y - originY) / DRAG_RADIUS, 1);
-
-    var speed = Math.sqrt(velX * velX + velY * velY);
-    var dist = Math.sqrt(dx * dx + dy * dy);
-
-    var wghtRange = dy > 0 ? LIM.wght[1] - startFont.wght : startFont.wght - LIM.wght[0];
-    var liveWght = clampAxis("wght", startFont.wght + dy * wghtRange);
-
-    var wdthRange = dx > 0 ? LIM.wdth[1] - startFont.wdth : startFont.wdth - LIM.wdth[0];
-    var liveWdth = clampAxis("wdth", startFont.wdth + dx * wdthRange);
-
-    var speedFactor = clamp(0, speed / 600, 1);
-    var opszDelta = (speedFactor + dist * 0.4) * (dy > 0 ? -1 : 1);
-    var opszRange = opszDelta < 0 ? startFont.opsz - LIM.opsz[0] : LIM.opsz[1] - startFont.opsz;
-    var liveOpsz = clampAxis("opsz", startFont.opsz + opszDelta * opszRange);
-
-    var lsRange = dx > 0 ? LIM.ls[1] - startFont.ls : startFont.ls - LIM.ls[0];
-    var liveLS = clampAxis("ls", startFont.ls + dx * lsRange);
-
-    var lhRange = dy > 0 ? startFont.lh - LIM.lh[0] : LIM.lh[1] - startFont.lh;
-    var liveLH = clampAxis("lh", startFont.lh + dy * -lhRange);
-
-    applyFont(card, liveWght, liveWdth, liveOpsz, liveLS, liveLH);
-  }
-
-  function onEnd(e) {
-    if (!active) return;
-    active = false;
-
-    var elapsed = Date.now() - startTime;
-    var wasTap = maxDist < TAP_DIST && elapsed < TAP_TIME;
-
-    if (wasTap) {
-      applyCurrentFont();
-      draw();
-    } else if (sculpting) {
-      // Drag on text — commit font state
-      commitFontFromCard(card);
-      saveFont();
-      writeHash();
-    } else if (!sculpting && maxDist >= TAP_DIST) {
-      // Drag on card padding — env already updated during move
-      saveEnv();
-      writeHash();
-    }
-    sculpting = false;
-  }
-
-  function onCancel() {
-    if (!active) return;
-    active = false;
-    if (sculpting) {
-      applyCurrentFont();
-    } else {
-      env.hue = startEnv.hue; env.sat = startEnv.sat; env.lit = startEnv.lit;
-      applyEnv();
-    }
-    sculpting = false;
-  }
-
-  // Touch
-  card.addEventListener("touchstart", function(e) { e.preventDefault(); onStart(e); }, { passive: false });
-  card.addEventListener("touchmove", function(e) { e.preventDefault(); onMove(e); }, { passive: false });
-  card.addEventListener("touchend", function(e) { e.preventDefault(); onEnd(e); });
-  card.addEventListener("touchcancel", onCancel);
-
-  // Mouse
-  card.addEventListener("mousedown", function(e) { e.preventDefault(); onStart(e); });
-  document.addEventListener("mousemove", function(e) { if (active) onMove(e); });
-  document.addEventListener("mouseup", function(e) { if (active) onEnd(e); });
-}
-
-function commitFontFromCard(card) {
-  var s = card.style;
-  var fvs = s.fontVariationSettings;
-  if (fvs) {
-    var m;
-    m = fvs.match(/"wght"\\s+([\\d.]+)/); if (m) font.wght = clampAxis("wght", parseFloat(m[1]));
-    m = fvs.match(/"wdth"\\s+([\\d.]+)/); if (m) font.wdth = clampAxis("wdth", parseFloat(m[1]));
-    m = fvs.match(/"opsz"\\s+([\\d.]+)/); if (m) font.opsz = clampAxis("opsz", parseFloat(m[1]));
-  }
-  if (s.letterSpacing) font.ls = clampAxis("ls", parseFloat(s.letterSpacing));
-  if (s.lineHeight) font.lh = clampAxis("lh", parseFloat(s.lineHeight));
-}
-
-// =============================================
-// Background env touch — outside card area
-// =============================================
-
-function initBackgroundTouch() {
-  var active = false;
-  var originX = 0, originY = 0;
-  var prevX = 0, prevY = 0;
-  var prevT = 0;
-  var velX = 0, velY = 0;
-  var maxDist = 0;
-  var startEnv = {};
-
-  var DRAG_RADIUS = 100;
-
-  function isBackground(e) {
     var t = e.target;
-    // Only activate on body, html, or elements that aren't interactive
-    if (t.closest && (t.closest("#card") || t.closest("#card-area") || t.closest("header") || t.closest("footer") || t.closest("#seed-row") || t.closest("#about"))) return false;
-    return true;
+    if (e.touches && e.touches[0]) t = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    return t === textEl || (textEl && textEl.contains(t));
   }
 
-  function getXY(e) {
-    if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
+  function twoGeo() {
+    var ids = Object.keys(touches); if (ids.length<2) return null;
+    var a=touches[ids[0]], b=touches[ids[1]];
+    var dx=b.cx-a.cx, dy=b.cy-a.cy, sdx=b.sx-a.sx, sdy=b.sy-a.sy;
+    return {
+      dist: Math.sqrt(dx*dx+dy*dy), angle: Math.atan2(dy,dx),
+      sdist: Math.sqrt(sdx*sdx+sdy*sdy), sangle: Math.atan2(sdy,sdx),
+      cy: (a.cy+b.cy)/2, scy: (a.sy+b.sy)/2
+    };
+  }
+
+  function avgSpread() {
+    var ids=Object.keys(touches), sp=0;
+    for (var i=0;i<ids.length;i++) { var t=touches[ids[i]]; sp+=Math.sqrt((t.cx-t.sx)*(t.cx-t.sx)+(t.cy-t.sy)*(t.cy-t.sy)); }
+    return clamp(0, sp/ids.length/100, 1);
   }
 
   function onStart(e) {
-    if (!isBackground(e)) return;
-    var p = getXY(e);
-    originX = prevX = p.x;
-    originY = prevY = p.y;
-    prevT = Date.now();
-    velX = velY = 0;
-    maxDist = 0;
-    active = true;
-    startEnv = { hue: env.hue, sat: env.sat, lit: env.lit };
-  }
-
-  function onMove(e) {
-    if (!active) return;
-    var p = getXY(e);
-    var now = Date.now();
-    var dt = Math.max(1, now - prevT) / 1000;
-
-    var instantVX = (p.x - prevX) / dt;
-    var instantVY = (p.y - prevY) / dt;
-    velX = velX * 0.7 + instantVX * 0.3;
-    velY = velY * 0.7 + instantVY * 0.3;
-    prevX = p.x; prevY = p.y; prevT = now;
-
-    var rawDist = Math.sqrt((p.x - originX) * (p.x - originX) + (p.y - originY) * (p.y - originY));
-    if (rawDist > maxDist) maxDist = rawDist;
-
-    var edx = clamp(-1, (p.x - originX) / DRAG_RADIUS, 1);
-    var edy = clamp(-1, (p.y - originY) / DRAG_RADIUS, 1);
-
-    var liveHue = (startEnv.hue + edx * 180 + 360) % 360;
-    var litRange = edy > 0 ? startEnv.lit - ENV_LIM.lit[0] : ENV_LIM.lit[1] - startEnv.lit;
-    var liveLit = clamp(ENV_LIM.lit[0], startEnv.lit + edy * -litRange, ENV_LIM.lit[1]);
-    var espeed = Math.sqrt(velX * velX + velY * velY);
-    var satDamp = clamp(0, espeed / 500, 1);
-    var liveSat = clamp(ENV_LIM.sat[0], startEnv.sat * (1 - satDamp * 0.8), ENV_LIM.sat[1]);
-
-    env.hue = liveHue;
-    env.sat = liveSat;
-    env.lit = liveLit;
-    applyLiveEnv(liveHue, liveSat, liveLit);
-  }
-
-  function onEnd() {
-    if (!active) return;
-    active = false;
-    if (maxDist >= 10) {
-      // env already updated during move
-      saveEnv();
-      writeHash();
+    e.preventDefault();
+    if (currentPage !== "card") return;
+    var first = Object.keys(touches).length === 0;
+    for (var i=0;i<e.changedTouches.length;i++) {
+      var t=e.changedTouches[i];
+      touches[t.identifier]={sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY};
+    }
+    if (first) {
+      if (sculptMode) {
+        zone = hitText(e) ? "text" : "env";
+      } else {
+        zone = "tap-only";
+      }
+      startFont = JSON.parse(JSON.stringify(font));
+      startEnv = JSON.parse(JSON.stringify(env));
+      tapTimer = Date.now(); maxDist = 0;
     }
   }
 
-  function onCancel() {
-    if (!active) return;
-    active = false;
-    env.hue = startEnv.hue; env.sat = startEnv.sat; env.lit = startEnv.lit;
+  function onMove(e) {
+    e.preventDefault();
+    for (var i=0;i<e.changedTouches.length;i++) {
+      var t=e.changedTouches[i];
+      if(touches[t.identifier]) { touches[t.identifier].cx=t.clientX; touches[t.identifier].cy=t.clientY; }
+    }
+    var ids=Object.keys(touches);
+    if(ids.length>0) {
+      var f=touches[ids[0]];
+      var d=Math.sqrt((f.cx-f.sx)*(f.cx-f.sx)+(f.cy-f.sy)*(f.cy-f.sy));
+      if(d>maxDist) maxDist=d;
+    }
+    // Only sculpt in sculpt mode
+    if (zone === "tap-only") return;
+    var n = ids.length;
+    if (zone === "text") sculptText(n);
+    else if (zone === "env") sculptEnv(n);
+  }
+
+  // --- TEXT: 1f=lh+wdth+ls, 2f=pinch:size rotate:opsz parallel-drag:wght, 3f=spread:ls ---
+  function sculptText(n) {
+    var ids=Object.keys(touches);
+    if(n===1) {
+      var f=touches[ids[0]];
+      var dx=clamp(-1,(f.cx-f.sx)/DR,1), dy=clamp(-1,(f.cy-f.sy)/DR,1);
+      // Vertical → line-height
+      font.lh=cl("lh",startFont.lh-dy*(dy>0?startFont.lh-0.7:2.2-startFont.lh));
+      // Horizontal → width + letter-spacing (both, so horizontal drag is visible)
+      font.wdth=cl("wdth",startFont.wdth+dx*(dx>0?112.5-startFont.wdth:startFont.wdth-87.5));
+      font.ls=cl("ls",startFont.ls+dx*(dx>0?0.15-startFont.ls:startFont.ls-(-0.2)));
+    } else if(n===2) {
+      var g=twoGeo(); if(!g) return;
+      var scale=g.dist/Math.max(1,g.sdist);
+      font.fsz=cl("fsz",startFont.fsz*scale);
+      // Rotate → opsz (multiplicative for log-scale feel: 30° = 2x)
+      var aDelta=(g.angle-g.sangle)*180/Math.PI;
+      font.opsz=cl("opsz",startFont.opsz*Math.pow(2,-aDelta/30));
+      var mdy=clamp(-1,(g.cy-g.scy)/120,1);
+      font.wght=cl("wght",startFont.wght+mdy*(mdy>0?900-startFont.wght:startFont.wght-300));
+    } else if(n>=3) {
+      var sp=avgSpread();
+      font.ls=cl("ls",startFont.ls+sp*0.2);
+    }
+    applyFont();
+  }
+
+  function sculptEnv(n) {
+    var ids=Object.keys(touches);
+    if(n===1) {
+      var f=touches[ids[0]];
+      var dx=clamp(-1,(f.cx-f.sx)/DR,1), dy=clamp(-1,(f.cy-f.sy)/DR,1);
+      env.hue=(startEnv.hue+dx*180+360)%360;
+      var lr=dy>0?startEnv.lit-5:98-startEnv.lit;
+      env.lit=ce("lit",startEnv.lit-dy*lr);
+    } else if(n===2) {
+      var g=twoGeo(); if(!g) return;
+      var aDelta=(g.angle-g.sangle)*180/Math.PI;
+      env.gAng=(startEnv.gAng+aDelta*2+360)%360;
+      var scale=g.dist/Math.max(1,g.sdist);
+      env.gSpread=ce("gSpread",startEnv.gSpread*scale);
+      var mdy=clamp(-1,(g.cy-g.scy)/150,1);
+      env.gOffset=ce("gOffset",startEnv.gOffset-mdy*40);
+    } else if(n>=3) {
+      var sp=avgSpread();
+      env.sat=ce("sat",startEnv.sat+sp*70);
+    }
     applyEnv();
   }
 
-  document.addEventListener("touchstart", function(e) { if (isBackground(e)) { e.preventDefault(); onStart(e); } }, { passive: false });
-  document.addEventListener("touchmove", function(e) { if (active) { e.preventDefault(); onMove(e); } }, { passive: false });
-  document.addEventListener("touchend", function(e) { if (active) onEnd(); });
-  document.addEventListener("touchcancel", onCancel);
+  function onEnd(e) {
+    e.preventDefault();
+    for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+    var n=Object.keys(touches).length;
+    if(n===0) {
+      var elapsed=Date.now()-tapTimer;
+      var wasTap=maxDist<TAP_DIST && elapsed<TAP_TIME;
+      if(wasTap) {
+        // Revert any micro-drift
+        font=JSON.parse(JSON.stringify(startFont));
+        env=JSON.parse(JSON.stringify(startEnv));
+        applyFont(); applyEnv();
+        draw();
+      } else if (zone !== "tap-only") {
+        // Commit sculpted state
+        saveFont(); saveEnv(); writeHash();
+      }
+      zone="idle";
+    } else {
+      startFont=JSON.parse(JSON.stringify(font));
+      startEnv=JSON.parse(JSON.stringify(env));
+    }
+  }
 
-  document.addEventListener("mousedown", function(e) { onStart(e); });
-  document.addEventListener("mousemove", function(e) { if (active) onMove(e); });
-  document.addEventListener("mouseup", function(e) { if (active) onEnd(); });
+  function onCancel(e) {
+    e.preventDefault();
+    for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+    if(Object.keys(touches).length===0) {
+      font=JSON.parse(JSON.stringify(startFont));
+      env=JSON.parse(JSON.stringify(startEnv));
+      applyFont(); applyEnv();
+      zone="idle";
+    }
+  }
+
+  card.addEventListener("touchstart",onStart,{passive:false});
+  card.addEventListener("touchmove",onMove,{passive:false});
+  card.addEventListener("touchend",onEnd,{passive:false});
+  card.addEventListener("touchcancel",onCancel,{passive:false});
+
+  // Mouse
+  var mDown=false, mZone="idle", msx=0, msy=0;
+  card.addEventListener("mousedown",function(e) {
+    e.preventDefault(); mDown=true; msx=e.clientX; msy=e.clientY;
+    if (sculptMode) { mZone=hitText(e)?"text":"env"; }
+    else { mZone="tap-only"; }
+    startFont=JSON.parse(JSON.stringify(font));
+    startEnv=JSON.parse(JSON.stringify(env));
+    tapTimer=Date.now(); maxDist=0;
+  });
+  document.addEventListener("mousemove",function(e) {
+    if(!mDown) return;
+    var d=Math.sqrt((e.clientX-msx)*(e.clientX-msx)+(e.clientY-msy)*(e.clientY-msy));
+    if(d>maxDist) maxDist=d;
+    if(mZone==="tap-only") return;
+    var dx=clamp(-1,(e.clientX-msx)/DR,1), dy=clamp(-1,(e.clientY-msy)/DR,1);
+    if(mZone==="text") {
+      font.lh=cl("lh",startFont.lh-dy*(dy>0?startFont.lh-0.7:2.2-startFont.lh));
+      font.wdth=cl("wdth",startFont.wdth+dx*(dx>0?112.5-startFont.wdth:startFont.wdth-87.5));
+      font.ls=cl("ls",startFont.ls+dx*(dx>0?0.15-startFont.ls:startFont.ls-(-0.2)));
+      applyFont();
+    } else {
+      env.hue=(startEnv.hue+dx*180+360)%360;
+      env.lit=ce("lit",startEnv.lit-dy*(dy>0?startEnv.lit-5:98-startEnv.lit));
+      applyEnv();
+    }
+  });
+  document.addEventListener("mouseup",function() {
+    if(!mDown) return; mDown=false;
+    var elapsed=Date.now()-tapTimer;
+    if(maxDist<TAP_DIST && elapsed<TAP_TIME) {
+      font=JSON.parse(JSON.stringify(startFont));
+      env=JSON.parse(JSON.stringify(startEnv));
+      applyFont(); applyEnv(); draw();
+    } else if(mZone!=="tap-only") { saveFont(); saveEnv(); writeHash(); }
+  });
+
+  // Background env touch (outside card)
+  initBgTouch();
 }
 
-// Shared: apply live env values during drag (used by both card-padding and background)
-function applyLiveEnv(h, s, l) {
-  var bg = "hsl(" + h.toFixed(0) + "," + s.toFixed(0) + "%," + l.toFixed(0) + "%)";
-  document.documentElement.style.background = bg;
-  document.body.style.background = bg;
-  var fg = l < 50 ? "hsl(" + h.toFixed(0) + "," + Math.max(5, s - 20).toFixed(0) + "%,90%)" : "#333";
-  document.body.style.color = fg;
-  var hdr = document.querySelector("header");
-  var ftr = document.querySelector("footer");
-  if (hdr) {
-    hdr.style.backgroundColor = bg;
-    var muted = l < 50 ? "hsl(" + h.toFixed(0) + "," + Math.max(5, s - 20).toFixed(0) + "%,70%)" : "#999";
-    hdr.querySelectorAll("button, #title").forEach(function(el) { el.style.color = muted; });
+function initBgTouch() {
+  var touches={}, startEnv={}, maxDist=0, DR=120;
+  function isBg(e) {
+    var t=e.target;
+    return !(t.closest&&(t.closest("#card")||t.closest("#card-area")||t.closest("header")||t.closest("footer")||t.closest("#seed-row")||t.closest("#about")));
   }
-  if (ftr) {
-    ftr.style.backgroundColor = bg;
-    ftr.querySelectorAll("button").forEach(function(btn) { btn.style.color = fg; });
+  function twoGeo() {
+    var ids=Object.keys(touches); if(ids.length<2) return null;
+    var a=touches[ids[0]], b=touches[ids[1]];
+    var dx=b.cx-a.cx, dy=b.cy-a.cy, sdx=b.sx-a.sx, sdy=b.sy-a.sy;
+    return { dist:Math.sqrt(dx*dx+dy*dy), sdist:Math.sqrt(sdx*sdx+sdy*sdy), angle:Math.atan2(dy,dx), sangle:Math.atan2(sdy,sdx), cy:(a.cy+b.cy)/2, scy:(a.sy+b.sy)/2 };
   }
-  var meta = document.getElementById("meta-theme");
-  if (meta) meta.setAttribute("content", bg);
+  function onStart(e) {
+    if(!isBg(e)||!sculptMode) return;
+    e.preventDefault();
+    var first=Object.keys(touches).length===0;
+    for(var i=0;i<e.changedTouches.length;i++) { var t=e.changedTouches[i]; touches[t.identifier]={sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY}; }
+    if(first) { startEnv=JSON.parse(JSON.stringify(env)); maxDist=0; }
+  }
+  function onMove(e) {
+    if(Object.keys(touches).length===0) return;
+    e.preventDefault();
+    for(var i=0;i<e.changedTouches.length;i++) { var t=e.changedTouches[i]; if(touches[t.identifier]){touches[t.identifier].cx=t.clientX;touches[t.identifier].cy=t.clientY;} }
+    var ids=Object.keys(touches), n=ids.length;
+    if(n>0){var f=touches[ids[0]];var d=Math.sqrt((f.cx-f.sx)*(f.cx-f.sx)+(f.cy-f.sy)*(f.cy-f.sy));if(d>maxDist)maxDist=d;}
+    if(n===1) {
+      var f=touches[ids[0]]; var dx=clamp(-1,(f.cx-f.sx)/DR,1), dy=clamp(-1,(f.cy-f.sy)/DR,1);
+      env.hue=(startEnv.hue+dx*180+360)%360;
+      var lr=dy>0?startEnv.lit-5:98-startEnv.lit;
+      env.lit=ce("lit",startEnv.lit-dy*lr);
+    } else if(n===2) {
+      var g=twoGeo(); if(!g) return;
+      env.gAng=(startEnv.gAng+(g.angle-g.sangle)*180/Math.PI*2+360)%360;
+      env.gSpread=ce("gSpread",startEnv.gSpread*(g.dist/Math.max(1,g.sdist)));
+      var mdy=clamp(-1,(g.cy-g.scy)/150,1);
+      env.gOffset=ce("gOffset",startEnv.gOffset-mdy*40);
+    } else if(n>=3) {
+      var sp=0;for(var j=0;j<ids.length;j++){var ft=touches[ids[j]];sp+=Math.sqrt((ft.cx-ft.sx)*(ft.cx-ft.sx)+(ft.cy-ft.sy)*(ft.cy-ft.sy));}
+      sp=clamp(0,sp/ids.length/100,1);
+      env.sat=ce("sat",startEnv.sat+sp*70);
+    }
+    applyEnv();
+  }
+  function onEnd(e) {
+    for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+    if(Object.keys(touches).length===0) { if(maxDist>=10){saveEnv();writeHash();} }
+    else { startEnv=JSON.parse(JSON.stringify(env)); }
+  }
+  function onCancel(e) {
+    for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+    if(Object.keys(touches).length===0){env=JSON.parse(JSON.stringify(startEnv));applyEnv();}
+  }
+  document.addEventListener("touchstart",function(e){if(isBg(e)&&sculptMode)onStart(e);},{passive:false});
+  document.addEventListener("touchmove",function(e){if(Object.keys(touches).length>0)onMove(e);},{passive:false});
+  document.addEventListener("touchend",onEnd);
+  document.addEventListener("touchcancel",onCancel);
+  var mDown=false,msx=0,msy=0,mStart={};
+  document.addEventListener("mousedown",function(e){if(!isBg(e)||!sculptMode)return;mDown=true;msx=e.clientX;msy=e.clientY;mStart=JSON.parse(JSON.stringify(env));});
+  document.addEventListener("mousemove",function(e){if(!mDown)return;var dx=clamp(-1,(e.clientX-msx)/DR,1),dy=clamp(-1,(e.clientY-msy)/DR,1);env.hue=(mStart.hue+dx*180+360)%360;env.lit=ce("lit",mStart.lit-dy*(dy>0?mStart.lit-5:98-mStart.lit));applyEnv();});
+  document.addEventListener("mouseup",function(){if(!mDown)return;mDown=false;saveEnv();writeHash();});
+}
+
+// =============================================
+// Floating handles — position IS value
+// 6 dual-axis handles, 12 variables
+// =============================================
+
+var HPAD=0.06;
+// Opsz uses logarithmic mapping: most visual change is 5-100
+function hValToFrac(v,k){
+  var l=LIM[k]||ELIM[k];
+  if(k==="opsz") return Math.log(v/l[0])/Math.log(l[1]/l[0]);
+  return(v-l[0])/(l[1]-l[0]);
+}
+function hFracToVal(f,k){
+  var l=LIM[k]||ELIM[k];
+  if(k==="opsz") return l[0]*Math.pow(l[1]/l[0],f);
+  return l[0]+f*(l[1]-l[0]);
+}
+function hFracToPx(f,total){return HPAD*total+f*(1-2*HPAD)*total}
+function hPxToFrac(px,total){return clamp(0,(px-HPAD*total)/((1-2*HPAD)*total),1)}
+
+// Seeded PRNG for handle sizes (mulberry32)
+function handleSeed(s){var h=0;for(var i=0;i<s.length;i++){h=Math.imul(31,h)+s.charCodeAt(i)|0}return h>>>0}
+function handleRng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var hRng=handleRng(handleSeed("oblique-proof"));
+
+var handleDefs=[
+  {id:"shape",glyph:"\\u204b",label:"shape",size:Math.round(13+hRng()*19),xObj:"font",xKey:"wdth",yObj:"font",yKey:"wght",yInvert:true,
+   xFmt:function(v){return"w\\u2009"+v.toFixed(0)},yFmt:function(v){return"W\\u2009"+v.toFixed(0)}},
+  {id:"detail",glyph:"\\u2042",label:"detail",size:Math.round(13+hRng()*19),xObj:"font",xKey:"ls",yObj:"font",yKey:"opsz",yInvert:false,
+   xFmt:function(v){return"sp\\u2009"+v.toFixed(2)+"em"},yFmt:function(v){return"op\\u2009"+v.toFixed(0)}},
+  {id:"scale",glyph:"\\u00a7",label:"scale",size:Math.round(13+hRng()*19),xObj:"font",xKey:"fsz",yObj:"font",yKey:"lh",yInvert:false,
+   xFmt:function(v){return v.toFixed(0)+"pt"},yFmt:function(v){return"lh\\u2009"+v.toFixed(2)}},
+  {id:"color",glyph:"\\u25c9",label:"colour",size:Math.round(13+hRng()*19),xObj:"env",xKey:"hue",yObj:"env",yKey:"lit",yInvert:false,
+   xFmt:function(v){return v.toFixed(0)+"\\u00b0"},yFmt:function(v){return v.toFixed(0)+"%"}},
+  {id:"tone",glyph:"\\u25c8",label:"tone",size:Math.round(13+hRng()*19),xObj:"env",xKey:"gAng",yObj:"env",yKey:"sat",yInvert:false,
+   xFmt:function(v){return v.toFixed(0)+"\\u00b0"},yFmt:function(v){return v.toFixed(0)+"%"}},
+  {id:"field",glyph:"\\u273b",label:"field",size:Math.round(13+hRng()*19),xObj:"env",xKey:"gOffset",yObj:"env",yKey:"gSpread",yInvert:false,
+   xFmt:function(v){return"off\\u2009"+v.toFixed(0)},yFmt:function(v){return"spr\\u2009"+v.toFixed(0)}},
+];
+
+var handleEls={};
+var handleDragging={};
+
+function getHObj(name){return name==="font"?font:env}
+function getHLim(k){return LIM[k]||ELIM[k]}
+
+function positionHandle(el,h){
+  if(handleDragging[h.id]) return; // don't fight the drag
+  var vw=window.innerWidth,vh=window.innerHeight;
+  var xFrac=hValToFrac(getHObj(h.xObj)[h.xKey],h.xKey);
+  var yFrac=hValToFrac(getHObj(h.yObj)[h.yKey],h.yKey);
+  if(h.yInvert) yFrac=1-yFrac;
+  el.style.left=hFracToPx(xFrac,vw)+"px";
+  el.style.top=hFracToPx(yFrac,vh)+"px";
+}
+
+function positionHandles(){
+  handleDefs.forEach(function(h){
+    var el=handleEls[h.id];
+    if(el) positionHandle(el,h);
+  });
+}
+
+function updateHandleTip(el,h){
+  var vals=el.querySelector(".tip-vals");
+  if(vals) vals.textContent=h.xFmt(getHObj(h.xObj)[h.xKey])+" / "+h.yFmt(getHObj(h.yObj)[h.yKey]);
+}
+
+function initHandles(){
+  handleDefs.forEach(function(h){
+    var el=document.createElement("div");
+    el.className="handle";el.id="h-"+h.id;
+    el.innerHTML='<span class="glyph" style="font-size:'+h.size+'px">'+h.glyph+'</span><span class="tip"><span class="tip-label">'+h.label+'</span><br><span class="tip-vals"></span></span>';
+    document.body.appendChild(el);
+    handleEls[h.id]=el;
+
+    var dragging=false,offX=0,offY=0;
+    function onStart(e){
+      e.preventDefault();e.stopPropagation();
+      dragging=true;handleDragging[h.id]=true;
+      el.classList.add("dragging");
+      var p=e.touches?e.touches[0]:e;
+      var r=el.getBoundingClientRect();
+      offX=p.clientX-(r.left+r.width/2);
+      offY=p.clientY-(r.top+r.height/2);
+    }
+    function onMove(e){
+      if(!dragging)return;
+      e.preventDefault();
+      var p=e.touches?e.touches[0]:e;
+      var vw=window.innerWidth,vh=window.innerHeight;
+      var x=p.clientX-offX,y=p.clientY-offY;
+      var xFrac=hPxToFrac(x,vw);
+      var xLim=getHLim(h.xKey);
+      if(h.xKey==="hue"||h.xKey==="gAng"){
+        getHObj(h.xObj)[h.xKey]=(hFracToVal(xFrac,h.xKey)+360)%360;
+      } else {
+        getHObj(h.xObj)[h.xKey]=clamp(xLim[0],hFracToVal(xFrac,h.xKey),xLim[1]);
+      }
+      var yFrac=hPxToFrac(y,vh);
+      if(h.yInvert) yFrac=1-yFrac;
+      var yLim=getHLim(h.yKey);
+      getHObj(h.yObj)[h.yKey]=clamp(yLim[0],hFracToVal(yFrac,h.yKey),yLim[1]);
+      el.style.left=clamp(HPAD*vw,x,(1-HPAD)*vw)+"px";
+      el.style.top=clamp(HPAD*vh,y,(1-HPAD)*vh)+"px";
+      updateHandleTip(el,h);
+      if(h.xObj==="font"||h.yObj==="font") applyFont();
+      if(h.xObj==="env"||h.yObj==="env") applyEnv();
+    }
+    function onEnd(){
+      if(!dragging)return;
+      dragging=false;handleDragging[h.id]=false;
+      el.classList.remove("dragging");
+      saveFont();saveEnv();writeHash();
+      positionHandle(el,h); // snap to clean position
+    }
+    el.addEventListener("touchstart",onStart,{passive:false});
+    document.addEventListener("touchmove",function(e){if(dragging)onMove(e)},{passive:false});
+    document.addEventListener("touchend",function(){if(dragging)onEnd()});
+    document.addEventListener("touchcancel",function(){if(dragging)onEnd()});
+    el.addEventListener("mousedown",onStart);
+    document.addEventListener("mousemove",function(e){if(dragging)onMove(e)});
+    document.addEventListener("mouseup",function(){if(dragging)onEnd()});
+  });
+  window.addEventListener("resize",positionHandles);
 }
 
 // --- Views ---
-
 function showCardView() {
-  currentPage = "card";
+  currentPage="card";
   document.body.classList.remove("about-active");
-  $("card-area").style.display = "";
-  $("seed-row").style.display = currentMode === "deterministic" ? "flex" : "none";
-  $("about").style.display = "none";
-  document.querySelector("footer").style.display = "";
-  updateButtons();
-  applyCurrentFont();
-  applyEnv();
+  $("card-area").style.display="";
+  $("seed-row").style.display=currentMode==="deterministic"?"flex":"none";
+  $("about").style.display="none";
+  document.querySelector("footer").style.display="";
+  document.querySelectorAll(".handle").forEach(function(h){h.style.display=""});
+  updateButtons(); applyFont(); applyEnv();
 }
-
 function showAboutView() {
-  currentPage = "about";
+  currentPage="about";
   document.body.classList.add("about-active");
-  $("card-area").style.display = "none";
-  $("seed-row").style.display = "none";
-  $("about").style.display = "block";
-  document.querySelector("footer").style.display = "none";
-  window.scrollTo(0, 0);
-  updateButtons();
-  applyEnv();
+  $("card-area").style.display="none";
+  $("seed-row").style.display="none";
+  $("about").style.display="block";
+  document.querySelector("footer").style.display="none";
+  document.querySelectorAll(".handle").forEach(function(h){h.style.display="none"});
+  window.scrollTo(0,0); updateButtons(); applyEnv();
 }
-
 function updateButtons() {
-  MODES.forEach(function(m) {
-    var btn = $("btn-" + m);
-    if (btn) btn.className = (m === currentMode && currentPage === "card") ? "active" : "";
-  });
-  var ab = $("btn-about");
-  if (ab) ab.className = currentPage === "about" ? "active" : "";
+  MODES.forEach(function(m){var b=$("btn-"+m);if(b)b.className=(m===currentMode&&currentPage==="card")?"active":"";});
+  var ab=$("btn-about"); if(ab) ab.className=currentPage==="about"?"active":"";
 }
-
-function updateSeedInput() {
-  var inp = $("seed-input");
-  if (inp) inp.value = currentSeed;
-}
-
-function setMode(mode) {
-  currentMode = mode;
-  currentPage = "card";
-  showCardView();
-  writeHash();
-  draw();
-}
+function setMode(mode) { currentMode=mode; currentPage="card"; showCardView(); writeHash(); draw(); }
 
 // --- Draw ---
-
 var drawing = false;
-
 function draw() {
-  if (currentPage === "about" || drawing) return;
-  drawing = true;
-
-  var card = $("card");
-  card.classList.remove("visible");
-  card.classList.add("fading");
-
-  var url = "/api/random?mode=" + currentMode;
-  if (currentSeed) url += "&seed=" + encodeURIComponent(currentSeed);
-
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      currentIndex = data.index;
-      setTimeout(function() {
-        $("card-text").textContent = data.strategy;
-        $("card-index").textContent = "#" + (data.index + 1);
-        applyCurrentFont();
-        card.classList.remove("fading");
-        card.classList.add("visible");
-        drawing = false;
-      }, 220);
-    })
-    .catch(function() {
-      setTimeout(function() {
-        $("card-text").textContent = "Error fetching strategy";
-        $("card-index").textContent = "";
-        applyCurrentFont();
-        card.classList.remove("fading");
-        card.classList.add("visible");
-        drawing = false;
-      }, 220);
-    });
+  if(currentPage==="about"||drawing) return;
+  drawing=true;
+  var card=$("card");
+  card.classList.remove("visible"); card.classList.add("fading");
+  var url="/api/random?mode="+currentMode;
+  if(currentSeed) url+="&seed="+encodeURIComponent(currentSeed);
+  fetch(url).then(function(r){return r.json();}).then(function(data) {
+    currentIndex=data.index;
+    setTimeout(function() {
+      $("card-text").textContent=data.strategy;
+      $("card-index").textContent="#"+(data.index+1);
+      applyFont();
+      card.classList.remove("fading"); card.classList.add("visible"); drawing=false;
+    },220);
+  }).catch(function(){
+    setTimeout(function(){
+      $("card-text").textContent="Error"; $("card-index").textContent="";
+      applyFont(); card.classList.remove("fading"); card.classList.add("visible"); drawing=false;
+    },220);
+  });
 }
 
 // --- About ---
-
-function esc(s) {
-  var d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
-}
-
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML;}
 function loadAbout() {
-  fetch("/api/about")
-    .then(function(r) { return r.json(); })
-    .then(function(a) {
-      var h = "<h2>" + esc(a.title) + "</h2>";
-      h += "<p class='subtitle'>" + esc(a.subtitle) + " \\u2014 " + esc(a.attribution) + "</p>";
-      a.description.forEach(function(d) { h += "<p>" + esc(d) + "</p>"; });
-
-      h += "<h2>Modes</h2><dl>";
-      Object.keys(a.modes).forEach(function(k) {
-        h += "<dt>" + esc(k) + "</dt><dd>" + esc(a.modes[k]) + "</dd>";
-      });
-      h += "</dl>";
-
-      var d = a.dev;
-      h += "<h2>For Developers &amp; Agents</h2>";
-      h += "<p>" + esc(d.intro) + "</p>";
-
-      h += "<h3>Endpoints</h3>";
-      d.endpoints.forEach(function(e) {
-        h += "<p><code>" + esc(e.method) + " " + esc(e.path) + "</code> \\u2014 " + esc(e.desc) + "</p>";
-      });
-
-      h += "<h3>Examples</h3>";
-      d.examples.forEach(function(e) {
-        h += "<pre><code>" + esc(e) + "</code></pre>";
-      });
-
-      h += "<h3>Use as a Skill</h3>";
-      h += "<p>Point any agent at the root URL with a plain <code>Accept</code> header to get a machine-readable skill document:</p>";
-      h += "<pre><code>curl " + esc(d.origin) + "</code></pre>";
-      h += "<p>Or download the skill document directly:</p>";
-      h += "<div class='actions'>";
-      h += "<a href='/skill.md'>Download SKILL.md</a>";
-      h += "<button onclick='copySkillUrl()'>Copy skill URL</button>";
-      h += "</div>";
-
-      $("about").innerHTML = h;
-    })
-    .catch(function(e) { console.error("loadAbout failed:", e); });
+  fetch("/api/about").then(function(r){return r.json();}).then(function(a) {
+    var h="<h2>"+esc(a.title)+"</h2>";
+    h+="<p class='subtitle'>"+esc(a.subtitle)+" \\u2014 "+esc(a.attribution)+"</p>";
+    a.description.forEach(function(d){h+="<p>"+esc(d)+"</p>";});
+    h+="<h2>Modes</h2><dl>";
+    Object.keys(a.modes).forEach(function(k){h+="<dt>"+esc(k)+"</dt><dd>"+esc(a.modes[k])+"</dd>";});
+    h+="</dl>";
+    var d=a.dev;
+    h+="<h2>For Developers &amp; Agents</h2><p>"+esc(d.intro)+"</p>";
+    h+="<h3>Endpoints</h3>";
+    d.endpoints.forEach(function(e){h+="<p><code>"+esc(e.method)+" "+esc(e.path)+"</code> \\u2014 "+esc(e.desc)+"</p>";});
+    h+="<h3>Examples</h3>";
+    d.examples.forEach(function(e){h+="<pre><code>"+esc(e)+"</code></pre>";});
+    h+="<h3>Use as a Skill</h3>";
+    h+="<p>Point any agent at the root URL with a plain <code>Accept</code> header to get a machine-readable skill document:</p>";
+    h+="<pre><code>curl "+esc(d.origin)+"</code></pre>";
+    h+="<p>Or download directly:</p><div class='actions'>";
+    h+="<a href='/skill.md'>Download SKILL.md</a>";
+    h+="<button onclick='copySkillUrl()'>Copy skill URL</button></div>";
+    $("about").innerHTML=h;
+  }).catch(function(){});
 }
-
-function copySkillUrl() {
-  navigator.clipboard.writeText(location.origin + "/skill.md").then(function() {
-    var btn = document.querySelector(".actions button");
-    if (btn) { var orig = btn.textContent; btn.textContent = "Copied!"; setTimeout(function() { btn.textContent = orig; }, 1500); }
-  });
-}
-window.copySkillUrl = copySkillUrl;
-
-window.addEventListener("hashchange", applyHash);
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
+function copySkillUrl(){navigator.clipboard.writeText(location.origin+"/skill.md").then(function(){var b=document.querySelector(".actions button");if(b){var o=b.textContent;b.textContent="Copied!";setTimeout(function(){b.textContent=o;},1500);}});}
+window.copySkillUrl=copySkillUrl;
+window.addEventListener("hashchange",applyHash);
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init);
+else init();
 `;
