@@ -135,7 +135,7 @@ function applyEnv() {
   r.setProperty("--bg", bg);
   r.setProperty("--fg", fg);
   r.setProperty("--muted", muted);
-  r.setProperty("--handle-blend", light ? "screen" : "darken");
+  r.setProperty("--handle-blend", light ? "color-burn" : "plus-lighter");
 
   var meta = document.getElementById("meta-theme");
   if (meta) meta.setAttribute("content", c1);
