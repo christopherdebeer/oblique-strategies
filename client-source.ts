@@ -94,6 +94,25 @@ function applyFont() {
   r.setProperty("--ls", font.ls.toFixed(4)+"em");
   r.setProperty("--lh", font.lh.toFixed(3));
   positionHandles();
+  requestAnimationFrame(fitCard);
+}
+
+// --- Fit card to viewport ---
+// If card overflows available height, scale down --fsz (display only).
+// font.fsz (source of truth) stays unchanged for state persistence.
+function fitCard() {
+  var card = $("card");
+  if (!card || currentPage !== "card") return;
+
+  var vh = window.innerHeight;
+  var available = vh - 140; // header ~50px + footer ~70px + margin
+  var actual = card.scrollHeight;
+
+  if (actual > available) {
+    var scale = available / actual;
+    var fitted = font.fsz * scale;
+    document.documentElement.style.setProperty("--fsz", fitted.toFixed(1)+"px");
+  }
 }
 
 // --- Apply environment (radial gradient) ---
@@ -135,7 +154,7 @@ function applyEnv() {
   r.setProperty("--bg", bg);
   r.setProperty("--fg", fg);
   r.setProperty("--muted", muted);
-  r.setProperty("--handle-blend", light ? "color-burn" : "plus-lighter");
+  r.setProperty("--handle-blend", "color-burn");
 
   var meta = document.getElementById("meta-theme");
   if (meta) meta.setAttribute("content", c1);
@@ -675,7 +694,7 @@ function initHandles(){
     document.addEventListener("mousemove",function(e){if(dragging)onMove(e)});
     document.addEventListener("mouseup",function(){if(dragging)onEnd()});
   });
-  window.addEventListener("resize",positionHandles);
+  window.addEventListener("resize", function() { positionHandles(); fitCard(); });
 }
 
 // --- Views ---

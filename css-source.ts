@@ -56,6 +56,12 @@ header {
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: font-style .3s, color .3s;
+  color: var(--fg);
+  letter-spacing: var(--ls);
+  cursor: pointer;
+  transition: font-style .3s, color .3s;
+  font-variation-settings: var(--font-variation);
+  font-style: oblique;
 }
 #title.sculpt-active {
   font-style: normal;
@@ -150,9 +156,9 @@ footer button.active {
   top: 0; right: 0;
   font-size: 11px;
   color: var(--fg);
-  font-style: italic;
   letter-spacing: 0.03em;
   pointer-events: none;
+  font-family: monospace;
 }
 
 #card {
@@ -164,7 +170,8 @@ footer button.active {
   padding: 40px;
   cursor: pointer;
   font-style: italic;
-  
+  max-width: min(600px, 70vw);
+  box-sizing: content-box;
 }
 
 /* In sculpt mode, card areas get sculpt cursors and block selection */
