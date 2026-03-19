@@ -94,25 +94,6 @@ function applyFont() {
   r.setProperty("--ls", font.ls.toFixed(4)+"em");
   r.setProperty("--lh", font.lh.toFixed(3));
   positionHandles();
-  requestAnimationFrame(fitCard);
-}
-
-// --- Fit card to viewport ---
-// If card overflows available height, scale down --fsz (display only).
-// font.fsz (source of truth) stays unchanged for state persistence.
-function fitCard() {
-  var card = $("card");
-  if (!card || currentPage !== "card") return;
-
-  var vh = window.innerHeight;
-  var available = vh - 140; // header ~50px + footer ~70px + margin
-  var actual = card.scrollHeight;
-
-  if (actual > available) {
-    var scale = available / actual;
-    var fitted = font.fsz * scale;
-    document.documentElement.style.setProperty("--fsz", fitted.toFixed(1)+"px");
-  }
 }
 
 // --- Apply environment (radial gradient) ---
@@ -339,15 +320,11 @@ function initTouch(card) {
   }
 
   function onStart(e) {
-    e.preventDefault();
     if (currentPage !== "card") return;
     var first = Object.keys(touches).length === 0;
-    for (var i=0;i<e.changedTouches.length;i++) {
-      var t=e.changedTouches[i];
-      touches[t.identifier]={sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY};
-    }
     if (first) {
       if (sculptMode) {
+        e.preventDefault();
         zone = hitText(e) ? "text" : "env";
       } else {
         zone = "tap-only";
@@ -356,10 +333,13 @@ function initTouch(card) {
       startEnv = JSON.parse(JSON.stringify(env));
       tapTimer = Date.now(); maxDist = 0;
     }
+    for (var i=0;i<e.changedTouches.length;i++) {
+      var t=e.changedTouches[i];
+      touches[t.identifier]={sx:t.clientX,sy:t.clientY,cx:t.clientX,cy:t.clientY};
+    }
   }
 
   function onMove(e) {
-    e.preventDefault();
     for (var i=0;i<e.changedTouches.length;i++) {
       var t=e.changedTouches[i];
       if(touches[t.identifier]) { touches[t.identifier].cx=t.clientX; touches[t.identifier].cy=t.clientY; }
@@ -372,6 +352,7 @@ function initTouch(card) {
     }
     // Only sculpt in sculpt mode
     if (zone === "tap-only") return;
+    e.preventDefault();
     var n = ids.length;
     if (zone === "text") sculptText(n);
     else if (zone === "env") sculptEnv(n);
@@ -470,9 +451,13 @@ function initTouch(card) {
   // Mouse
   var mDown=false, mZone="idle", msx=0, msy=0;
   card.addEventListener("mousedown",function(e) {
-    e.preventDefault(); mDown=true; msx=e.clientX; msy=e.clientY;
-    if (sculptMode) { mZone=hitText(e)?"text":"env"; }
-    else { mZone="tap-only"; }
+    mDown=true; msx=e.clientX; msy=e.clientY;
+    if (sculptMode) {
+      e.preventDefault();
+      mZone=hitText(e)?"text":"env";
+    } else {
+      mZone="tap-only";
+    }
     startFont=JSON.parse(JSON.stringify(font));
     startEnv=JSON.parse(JSON.stringify(env));
     tapTimer=Date.now(); maxDist=0;
@@ -482,6 +467,7 @@ function initTouch(card) {
     var d=Math.sqrt((e.clientX-msx)*(e.clientX-msx)+(e.clientY-msy)*(e.clientY-msy));
     if(d>maxDist) maxDist=d;
     if(mZone==="tap-only") return;
+    e.preventDefault();
     var dx=clamp(-1,(e.clientX-msx)/DR,1), dy=clamp(-1,(e.clientY-msy)/DR,1);
     if(mZone==="text") {
       font.lh=cl("lh",startFont.lh-dy*(dy>0?startFont.lh-0.7:2.2-startFont.lh));
@@ -645,6 +631,7 @@ function initHandles(){
     el.innerHTML='<span class="glyph" style="font-size:'+h.size+'px">'+h.glyph+'</span><span class="tip"><span class="tip-label">'+h.label+'</span><br><span class="tip-vals"></span></span>';
     document.body.appendChild(el);
     handleEls[h.id]=el;
+    updateHandleTip(el,h);
 
     var dragging=false,offX=0,offY=0;
     function onStart(e){
@@ -694,7 +681,7 @@ function initHandles(){
     document.addEventListener("mousemove",function(e){if(dragging)onMove(e)});
     document.addEventListener("mouseup",function(){if(dragging)onEnd()});
   });
-  window.addEventListener("resize", function() { positionHandles(); fitCard(); });
+  window.addEventListener("resize", positionHandles);
 }
 
 // --- Views ---

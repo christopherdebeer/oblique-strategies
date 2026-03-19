@@ -17,6 +17,15 @@ html, body {
   font-family: 'Playfair', serif;
   color: var(--fg, #333);
 }
+
+::selection {
+  background: color-mix(in srgb, var(--c2) 70%, var(--c3) 30%);
+  color: var(--fg);
+}
+::-moz-selection {
+  background: color-mix(in srgb, var(--c2) 70%, var(--c3) 30%);
+  color: var(--fg);
+}
 body {
   display: flex; flex-direction: column;
   justify-content: center; align-items: center;
@@ -75,7 +84,6 @@ header {
   padding-top: calc(max(12px, env(safe-area-inset-top)) + 28px);
   font-size: 11px; font-style: italic;
   color: #bbb; z-index: 10;
-  pointer-events: none;
   opacity: 1;
   transition: opacity 1s ease;
 }
@@ -157,7 +165,6 @@ footer button.active {
   font-size: 11px;
   color: var(--fg);
   letter-spacing: 0.03em;
-  pointer-events: none;
   font-family: monospace;
 }
 
@@ -170,8 +177,6 @@ footer button.active {
   padding: 40px;
   cursor: pointer;
   font-style: italic;
-  max-width: min(600px, 70vw);
-  box-sizing: content-box;
 }
 
 /* In sculpt mode, card areas get sculpt cursors and block selection */
@@ -214,7 +219,6 @@ body.sculpt #card-text:active { cursor: grabbing; }
   line-height: 1;
   opacity: 0.6;
   transition: opacity .25s, transform .25s;
-  pointer-events: none;
 }
 .handle:hover .glyph, .handle.dragging .glyph {
   opacity: 1; transform: scale(1.15);
@@ -234,7 +238,7 @@ body.sculpt #card-text:active { cursor: grabbing; }
   font-size: 8px; letter-spacing: 0.04em;
   font-family: monospace; text-align: center;
   opacity: 0; transition: opacity .2s;
-  pointer-events: none; white-space: nowrap;
+  white-space: nowrap;
   line-height: 1.6;
 }
 .handle .tip .tip-label {
